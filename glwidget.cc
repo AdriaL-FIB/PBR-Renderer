@@ -91,7 +91,7 @@ bool ReadFile(const std::string filename, std::string *shader_source) {
 }
 
 bool LoadImage(const std::string& path, GLuint cube_map_pos) {
-    QImage image;s
+    QImage image;
     bool res = image.load(path.c_str());
     if (res) {
         // Asegurar formato consistente
