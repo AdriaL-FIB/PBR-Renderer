@@ -33,7 +33,10 @@ public:
 
   void DrawCube();
   void DrawQuad();
-  void GenerateIrradianceAndPrefilteredMaps(const int cubemap_width, const int cubemap_height, const int mip_levels);
+
+  void InitGBufferTextures();
+
+  void renderGBuffer();
 
   /**
    * @brief LoadModel Loads a PLY model at the filename path into the mesh_ data
@@ -211,6 +214,10 @@ private:
   unsigned int irradianceMap;
   unsigned int prefilterMap;
   unsigned int brdfLUTTexture;
+
+
+  GLuint gBufferFBO;
+  GLuint gAlbedoTexture, gNormalTexture, gDepthTexture;
 
 
  protected slots:
