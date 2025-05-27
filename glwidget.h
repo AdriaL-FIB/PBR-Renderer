@@ -219,6 +219,9 @@ private:
   GLuint gBufferFBO;
   GLuint gAlbedoTexture, gNormalTexture, gDepthTexture;
 
+  bool renderGBuffer_;
+  int showGBuffer;
+
 
  protected slots:
   /**
