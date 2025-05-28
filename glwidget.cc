@@ -59,7 +59,7 @@ void checkOpenGLError(const char* location) {
 
 const double kFieldOfView = 60;
 const double kZNear = 0.0001;
-const double kZFar = 20;
+const double kZFar = 2;
 
 const std::vector<std::vector<std::string>> kShaderFiles = {
                 {"../shaders/phong.vert",        "../shaders/phong.frag"},
@@ -567,7 +567,7 @@ GLWidget::GLWidget(QWidget *parent)
     metalness_(0),
     roughness_(0),
     renderGBuffer_(true),
-    showGBuffer(1)
+    showGBuffer(-1)
         {
   setFocusPolicy(Qt::StrongFocus);
 }
@@ -907,12 +907,10 @@ void GLWidget::keyPressEvent(QKeyEvent *event) {
   update();
 }
 
-
 void GLWidget::paintGL()
 {
     glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    checkOpenGLError("paintGL");
 
     if (initialized_) {
         camera_.SetViewport();
@@ -939,13 +937,21 @@ void GLWidget::paintGL()
 
             GLint zNear_location, zFar_location;
 
-            renderGBuffer();
 
-            if (showGBuffer) {
+            checkOpenGLError("Before renderGBuffer()");
+            renderGBuffer();
+            checkOpenGLError("After renderGBuffer()");
+
+            //std::cout << "showGBuffer = " << showGBuffer << std::endl;
+            if (showGBuffer > 0) {
 
                 glBindFramebuffer(GL_READ_FRAMEBUFFER, gBufferFBO);
-                glReadBuffer(GL_DEPTH_ATTACHMENT);
+                checkOpenGLError("glBindFramebuffer GL_READ_FRAMEBUFFER");
+
+
                 glBindFramebuffer(GL_DRAW_FRAMEBUFFER, defaultFramebufferObject());
+                checkOpenGLError("glBindFramebuffer GL_DRAW_FRAMEBUFFER");
+
 
                 glBlitFramebuffer(
                     0, 0, width_, height_,
@@ -953,6 +959,7 @@ void GLWidget::paintGL()
                     GL_DEPTH_BUFFER_BIT,
                     GL_NEAREST
                 );
+                checkOpenGLError("glBlitFramebuffer");
 
                 programs_[SHADER_GBUFFER_VIEW]->bind();
 
@@ -975,7 +982,7 @@ void GLWidget::paintGL()
                 glBindTexture(GL_TEXTURE_2D, gDepthTexture);
                 glUniform1i(depth_sampler_loc, 2);
 
-                glUniform1i(current_text_location, currentTexture_);
+                glUniform1i(current_text_location, showGBuffer-1);
                 glUniform1f(zNear_location, kZNear);
                 glUniform1f(zFar_location, kZFar);
 
@@ -1171,6 +1178,21 @@ void GLWidget::SetMetalness(double d) {
 
 void GLWidget::SetRoughness(double d) {
     roughness_ = d;
+    update();
+}
+
+void GLWidget::SetShowGBuffer(bool b) {
+    showGBuffer *= -1;
+    update();
+}
+
+void GLWidget::SetShowGBuffer(int i) {
+    int sign;
+    if (showGBuffer >= 0)
+        sign = 1;
+    else
+        sign = -1;
+    showGBuffer = (i+1) * sign;
     update();
 }
 

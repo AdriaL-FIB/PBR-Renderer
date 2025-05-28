@@ -27,12 +27,12 @@ void main (void) {
         float depthValue = texture(gDepthSampler, uvs).r; // ¡Importante: .r para profundidad!
 
         // Opcional: Visualizar profundidad linealizada y normalizada
-        // float linearDepth = LinearizeDepth(depthValue);
-        // float normalizedLinearDepth = (linearDepth - u_zNear) / (u_zFar - u_zNear);
-        // FragColor = vec4(vec3(normalizedLinearDepth), 1.0);
+        float linearDepth = LinearizeDepth(depthValue);
+        float normalizedLinearDepth = (linearDepth - zNear) / (zFar - zNear);
+        frag_color = vec4(vec3(normalizedLinearDepth), 1.0);
 
         // Visualizar profundidad cruda (generalmente se ve casi todo blanco o negro)
-        frag_color = vec4(vec3(depthValue), 1.0);
+        //frag_color = vec4(vec3(depthValue), 1.0);
     } else {
         frag_color = vec4(1.0, 0.0, 1.0, 1.0); // Color de error (magenta)
     }

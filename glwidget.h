@@ -289,6 +289,9 @@ private:
    */
   void SetRoughness(double);
 
+  void SetShowGBuffer(bool set);
+  void SetShowGBuffer(int);
+
  signals:
   /**
    * @brief SetFaces Signal that updates the interface label "Faces".
