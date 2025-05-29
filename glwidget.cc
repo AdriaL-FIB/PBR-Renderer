@@ -963,9 +963,7 @@ void GLWidget::paintGL()
             GLint zNear_location, zFar_location;
 
 
-            checkOpenGLError("Before renderGBuffer()");
             renderGBuffer();
-            checkOpenGLError("After renderGBuffer()");
 
             //std::cout << "showGBuffer = " << showGBuffer << std::endl;
             if (showGBuffer > 0) {
@@ -1087,7 +1085,7 @@ void GLWidget::paintGL()
 
                 //T0DO END
 
-                glUniform1i(current_text_location, currentTexture_ + 2); // TODO: chapuza ?
+                glUniform1i(current_text_location, currentTexture_ + 2); // T0DO: chapuza ?
                 glUniform3f(fresnel_location, fresnel_[0], fresnel_[1], fresnel_[2]);
                 glUniform3f(light_location, 0, 2, 0);
                 glUniform1f(roughness_location, roughness_);
