@@ -59,7 +59,7 @@ void checkOpenGLError(const char* location) {
 
 const double kFieldOfView = 60;
 const double kZNear = 0.0001;
-const double kZFar = 2;
+const double kZFar = 5;
 
 const std::vector<std::vector<std::string>> kShaderFiles = {
                 {"../shaders/phong.vert",        "../shaders/phong.frag"},
@@ -567,7 +567,8 @@ GLWidget::GLWidget(QWidget *parent)
     metalness_(0),
     roughness_(0),
     renderGBuffer_(true),
-    showGBuffer(-1)
+    showGBuffer(-1),
+    VAO(0), VAO_sky(0), VBO_i(0), VBO_n(0), VBO_tc(0), VBO_v(0), VBO_i_sky(0), VBO_v_sky(0)
         {
   setFocusPolicy(Qt::StrongFocus);
 }
@@ -594,50 +595,57 @@ bool GLWidget::LoadModel(const QString &filename) {
     res = data_representation::ReadFromObj(file, mesh.get());
   } else if(type.compare("null") == 0) {
     res = data_representation::CreateSphere(mesh.get());
+    std::cout << "Creating Sphere" << std::endl;
   }
 
   if (res) {
+    makeCurrent();
     mesh_.reset(mesh.release());
     camera_.UpdateModel(mesh_->min_, mesh_->max_);
     //mesh_->computeNormals();
 
-    // TODO(students): Create / Initialize buffers.
+    // T0DO(students): Create / Initialize buffers.
     //MESH: You need to create 1 VAO and 4 VBO
     //mesh_->vertices -> attrib location 0
     //mesh_->normals -> attrib location 1
     //mesh_->texCoords -> attrib location 2
     //mesh_->faces -> elements
 
-    glGenVertexArrays(1, &VAO);
+    //if (VAO != 0) glDeleteVertexArrays(1, &VAO);
+    //glGenVertexArrays(1, &VAO);
 
-    GLuint coordBufferId;
-    GLuint normalBufferId;
-    GLuint texCoordBufferId;
-    GLuint faceBufferId;
+    //checkOpenGLError("glGenVertexArrays VAO");
 
-    glGenBuffers(1, &coordBufferId);
-    glGenBuffers(1, &normalBufferId);
-    glGenBuffers(1, &texCoordBufferId);
-    glGenBuffers(1, &faceBufferId);
+
+    //if (VBO_v != 0) glDeleteBuffers(1, &VBO_v);
+    //if (VBO_n != 0) glDeleteBuffers(1, &VBO_n);
+    //if (VBO_tc != 0) glDeleteBuffers(1, &VBO_tc);
+    //if (VBO_i != 0) glDeleteBuffers(1, &VBO_i);
+    //glGenBuffers(1, &VBO_v);
+    //glGenBuffers(1, &VBO_n);
+    //glGenBuffers(1, &VBO_tc);
+    //glGenBuffers(1, &VBO_i);
+    //checkOpenGLError("glGenBuffers VBO");
+
 
     glBindVertexArray(VAO);
 
-    glBindBuffer(GL_ARRAY_BUFFER, coordBufferId);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO_v);
     glBufferData(GL_ARRAY_BUFFER, sizeof(float)*mesh_->vertices_.size(), &mesh_->vertices_[0], GL_STATIC_DRAW);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 3, 0);
     glEnableVertexAttribArray(0);
 
-    glBindBuffer(GL_ARRAY_BUFFER, normalBufferId);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO_n);
     glBufferData(GL_ARRAY_BUFFER, sizeof(float)*mesh_->normals_.size(), &mesh_->normals_[0], GL_STATIC_DRAW);
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 3, 0);
     glEnableVertexAttribArray(1);
 
-    glBindBuffer(GL_ARRAY_BUFFER, texCoordBufferId);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO_tc);
     glBufferData(GL_ARRAY_BUFFER, sizeof(float)*mesh_->texCoords_.size(), &mesh_->texCoords_[0], GL_STATIC_DRAW);
     glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 2, 0);
     glEnableVertexAttribArray(2);
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, faceBufferId);  
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, VBO_i);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(int)*mesh_->faces_.size(), &mesh_->faces_[0], GL_STATIC_DRAW);
 
     glBindVertexArray(0);
@@ -645,67 +653,72 @@ bool GLWidget::LoadModel(const QString &filename) {
     //SKY BOX: You need to create 1 VAO and 2 VBO:
     // vertices -> attrib location 0
     //faces -> elements
+    
+    if (VAO_sky == 0) {
+        glGenVertexArrays(1, &VAO_sky);
 
-    glGenVertexArrays(1, &VAO_sky);
+        glGenBuffers(1, &VBO_v_sky);
+        glGenBuffers(1, &VBO_i_sky);
 
-    glGenBuffers(1, &VBO_v_sky);
-    glGenBuffers(1, &VBO_i_sky);
-
-    glBindVertexArray(VAO_sky);
+        glBindVertexArray(VAO_sky);
 
 
-    /*
-     *
-     *
-     *          4           5
-     *      6           7
-     *
-     *
-     *          0           1
-     *      2           3
-     */
+        /*
+         *
+         *
+         *          4           5
+         *      6           7
+         *
+         *
+         *          0           1
+         *      2           3
+         */
 
-    skyVertices_ = {
-      -1.f, -1.f, -1.f,
-      +1.f, -1.f, -1.f,
-      -1.f, -1.f, +1.f,
-      +1.f, -1.f, +1.f,
-      -1.f, +1.f, -1.f,
-      +1.f, +1.f, -1.f,
-      -1.f, +1.f, +1.f,
-      +1.f, +1.f, +1.f,
-      };
+        skyVertices_ = {
+          -1.f, -1.f, -1.f,
+          +1.f, -1.f, -1.f,
+          -1.f, -1.f, +1.f,
+          +1.f, -1.f, +1.f,
+          -1.f, +1.f, -1.f,
+          +1.f, +1.f, -1.f,
+          -1.f, +1.f, +1.f,
+          +1.f, +1.f, +1.f,
+          };
 
-    skyFaces_ = {
-      0, 1, 2,
-      1, 3, 2,
+        skyFaces_ = {
+          0, 1, 2,
+          1, 3, 2,
 
-      2, 7, 6,
-      2, 3, 7,
+          2, 7, 6,
+          2, 3, 7,
 
-      0, 5, 4,
-      0, 1, 5,
+          0, 5, 4,
+          0, 1, 5,
 
-      6, 4, 5,
-      6, 5, 7,
+          6, 4, 5,
+          6, 5, 7,
       
-      3, 5, 7,
-      3, 1, 5,
+          3, 5, 7,
+          3, 1, 5,
 
-      0, 6, 4,
-      0, 2, 6
-    };
+          0, 6, 4,
+          0, 2, 6
+        };
 
-    glBindBuffer(GL_ARRAY_BUFFER, VBO_v_sky);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(float)*skyVertices_.size(), &skyVertices_[0], GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 3, 0);
-    glEnableVertexAttribArray(0);
+        glBindBuffer(GL_ARRAY_BUFFER, VBO_v_sky);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(float)*skyVertices_.size(), &skyVertices_[0], GL_STATIC_DRAW);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 3, 0);
+        glEnableVertexAttribArray(0);
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, VBO_i_sky);  
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(int)*skyFaces_.size(), &skyFaces_[0], GL_STATIC_DRAW);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, VBO_i_sky);  
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(int)*skyFaces_.size(), &skyFaces_[0], GL_STATIC_DRAW);
 
-    glBindVertexArray(0);
-    // TODO END.
+        glBindVertexArray(0);
+        // T0DO END.
+    }
+
+    checkOpenGLError("Load model");
+    doneCurrent();
 
     emit SetFaces(QString(std::to_string(mesh_->faces_.size() / 3).c_str()));
     emit SetVertices(
@@ -798,14 +811,16 @@ void GLWidget::initializeGL()
 {
   // Cal inicialitzar l'ús de les funcions d'OpenGL
   initializeOpenGLFunctions();
+  checkOpenGLError("initializeOpenGLFunctions");
 
   //initializing opengl state
-  glEnable(GL_NORMALIZE);
+  //glEnable(GL_NORMALIZE);
   glDisable(GL_CULL_FACE);
   glCullFace(GL_BACK);
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS); 
-  
+  checkOpenGLError("OpenGL State Setup");
+
   //glEnable(GL_TEXTURE_2D);
 
   //generating needed textures
@@ -816,7 +831,9 @@ void GLWidget::initializeGL()
   glGenTextures(1, &metalness_map_);
 
   InitCaptureFBO();
+
   InitGBufferTextures();
+
 
   //create shader programs
   for (unsigned int k = 0; k < kShaderFiles.size(); ++k) {
@@ -831,6 +848,14 @@ void GLWidget::initializeGL()
 
   if (!res) exit(0);
 
+  glGenVertexArrays(1, &VAO);
+
+  glGenBuffers(1, &VBO_v);
+  glGenBuffers(1, &VBO_n);
+  glGenBuffers(1, &VBO_tc);
+  glGenBuffers(1, &VBO_i);
+
+  //LoadModel("../models/Armadillo.ply");//create an sphere
   LoadModel(".null");//create an sphere
 
   initialized_ = true;

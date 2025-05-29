@@ -5,3 +5,6 @@ release
 .vs
 .qmake.stash
 Makefile
+
+models/*
+!models/Armadillo.ply
