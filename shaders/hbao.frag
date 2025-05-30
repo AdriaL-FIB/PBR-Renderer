@@ -1,6 +1,5 @@
 #version 330
 
-
 in vec2 uvs;
 
 out vec4 frag_color;
@@ -11,19 +10,71 @@ uniform int numDirs;
 uniform int nSamples;
 uniform float searchRadius;
 
+uniform float fov;
+uniform float aspectRatio;
+
+uniform sampler2D depthTex;
+uniform sampler2D normalTex;
+
 const float PI = 3.14159265359;
 
-float LinearizeDepth(float depth) {
-    float z = depth * 2.0 - 1.0; // de [0,1] a NDC [-1,1]
-    return (2.0 * zNear * zFar) / (zFar + zNear - z * (zFar - zNear));
+float height = 2 * zNear * tan(fov/2);
+float width = aspectRatio * height;
+
+float linearizeDepth(float depth) {
+    float z_ndc = depth * 2.f - 1.f;
+    return (2.f * zNear * zFar) / (zFar + zNear - z_ndc * (zFar - zNear));
+}
+
+vec3 recoverEyePos(vec2 tex_coords) {
+    float z_eye = linearizeDepth(texture(depthTex, tex_coords).r);
+
+    float BC_x = (tex_coords.x * 2.f - 1.f) * width;
+    float BC_y = (tex_coords.y * 2.f - 1.f) * height;
+
+    float x_eye = BC_x * z_eye / zNear;
+    float y_eye = BC_y * z_eye / zNear;
+    return vec3(x_eye, y_eye, -z_eye);
 }
 
 void main (void) {
+    vec3 P = recoverEyePos(uvs);
+    vec3 n = texture(normalTex, uvs).rgb;
+
+    
+
+    float ao = 0;
     float step_ = searchRadius / nSamples; 
-    for (int dir = 0; dir < numDirs; ++dir) {
-        float angle = (dir / numDirs) * 2 * PI;
-        for (int smpl = 0; smpl < nSamples; ++smpl) {
-            
+    for (int d = 0; d < numDirs; ++d) {
+        float angle = (d / numDirs) * 2 * PI;
+        vec2 dir = vec2(cos(angle), sin(angle));
+
+        float t_theta = atan(-dot(dir,n.xy),n.z);
+
+        float h_theta = t_theta;
+        float r_theta = 0;
+        for (int i = 0; i < nSamples; ++i) {
+            vec2 S_uv = uvs + dir * step_ * i;
+            if (S_uv.x < 0.0 || S_uv.x > 1.0 || S_uv.y < 0.0 || S_uv.y > 1.0) {
+                continue;
+            }
+            vec3 S = recoverEyePos(S_uv);
+
+            vec3 D = S - P;
+            float dist_xy = length(D.xy);
+
+            float alpha = atan(-D.z, dist_xy);
+
+            if (alpha > h_theta) {
+                h_theta = alpha;
+                r_theta = dist_xy;
+            }
         }
+
+        ao += (sin(h_theta) - sin(t_theta)) * (max(0, 1 - r_theta / searchRadius));
     }
+
+    ao /= float(numDirs);
+
+    frag_color = vec4(vec3(1.f - ao), 1.f);
 }
