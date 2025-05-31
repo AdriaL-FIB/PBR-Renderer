@@ -16,10 +16,16 @@ uniform float aspectRatio;
 uniform sampler2D depthTex;
 uniform sampler2D normalsTex;
 
+uniform bool improvements;
+
 const float PI = 3.14159265359;
 
 float height = 2 * zNear * tan(fov/2);
 float width = aspectRatio * height;
+
+float rand(vec2 co) {
+    return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
+}
 
 float linearizeDepth(float depth) {
     float z_ndc = depth * 2.f - 1.f;
@@ -45,9 +51,14 @@ void main (void) {
 
     float searchRadius_uv = searchRadius / (2 * P.z * tan(fov/2.f));
 
+    float init_phase = 0;
+    if (improvements) {
+        init_phase = rand(uvs);
+    }
+
     float step_ = searchRadius_uv / nSamples; 
     for (int d = 0; d < numDirs; ++d) {
-        float angle = (d / float(numDirs)) * 2 * PI;
+        float angle = (d / float(numDirs)) * 2 * PI + init_phase;
         vec2 dir = vec2(cos(angle), sin(angle));
 
         float t_theta = atan(-dot(dir,n.xy),n.z);
