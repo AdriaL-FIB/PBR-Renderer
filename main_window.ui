@@ -404,6 +404,63 @@
               </widget>
              </item>
              <item>
+              <layout class="QHBoxLayout" name="horizontalLayout_5">
+               <item>
+                <widget class="QLabel" name="label_6">
+                 <property name="text">
+                  <string>Radius</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QDoubleSpinBox" name="doubleSpinBox">
+                 <property name="stepType">
+                  <enum>QAbstractSpinBox::AdaptiveDecimalStepType</enum>
+                 </property>
+                 <property name="value">
+                  <double>0.100000000000000</double>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </item>
+             <item>
+              <layout class="QHBoxLayout" name="horizontalLayout_7">
+               <item>
+                <widget class="QLabel" name="label_8">
+                 <property name="text">
+                  <string>N_Directions</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QSpinBox" name="spinBox_2">
+                 <property name="value">
+                  <number>10</number>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </item>
+             <item>
+              <layout class="QHBoxLayout" name="horizontalLayout_6">
+               <item>
+                <widget class="QLabel" name="label_7">
+                 <property name="text">
+                  <string>N_Samples</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QSpinBox" name="spinBox">
+                 <property name="value">
+                  <number>10</number>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </item>
+             <item>
               <spacer name="verticalSpacer">
                <property name="orientation">
                 <enum>Qt::Vertical</enum>
@@ -583,6 +640,9 @@
     <slot>SetMetalness(double)</slot>
     <slot>SetShowGBuffer(bool)</slot>
     <slot>SetShowGBuffer(int)</slot>
+    <slot>SetInfluenceRadius(double)</slot>
+    <slot>SetNumSamples(int)</slot>
+    <slot>SetNumDirections(int)</slot>
    </slots>
   </customwidget>
  </customwidgets>
@@ -857,6 +917,54 @@
     <hint type="destinationlabel">
      <x>543</x>
      <y>168</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>doubleSpinBox</sender>
+   <signal>valueChanged(double)</signal>
+   <receiver>glwidget</receiver>
+   <slot>SetInfluenceRadius(double)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>760</x>
+     <y>157</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>498</x>
+     <y>253</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>spinBox</sender>
+   <signal>valueChanged(int)</signal>
+   <receiver>glwidget</receiver>
+   <slot>SetNumSamples(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>773</x>
+     <y>221</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>598</x>
+     <y>290</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>spinBox_2</sender>
+   <signal>valueChanged(int)</signal>
+   <receiver>glwidget</receiver>
+   <slot>SetNumDirections(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>749</x>
+     <y>194</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>590</x>
+     <y>271</y>
     </hint>
    </hints>
   </connection>

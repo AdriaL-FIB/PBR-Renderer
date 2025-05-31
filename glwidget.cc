@@ -20,6 +20,7 @@
 
 #define SHADER_GBUFFER 5
 #define SHADER_GBUFFER_VIEW 6
+#define SHADER_HBAO 7
 
 namespace {
 
@@ -69,6 +70,7 @@ const std::vector<std::vector<std::string>> kShaderFiles = {
                 {"../shaders/ibl-pbs.vert",      "../shaders/ibl-pbs.frag"},
                 {"../shaders/gbuffer.vert",      "../shaders/gbuffer.frag"},
                 {"../shaders/gbuffer-view.vert", "../shaders/gbuffer-view.frag"},
+                {"../shaders/hbao.vert",         "../shaders/hbao.frag"},
 
 
                 {"../shaders/precomputeBRDF.vert",         "../shaders/precomputeBRDF.frag"},
@@ -510,13 +512,6 @@ void GLWidget::renderGBuffer() {
     if (mesh_ != nullptr) {
         GLint projection_location, view_location, model_location, normal_matrix_location;
 
-        glBindFramebuffer(GL_FRAMEBUFFER, gBufferFBO);
-
-        GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-        if (status != GL_FRAMEBUFFER_COMPLETE) {
-            std::cerr << "Framebuffer not complete. Status: 0x" << std::hex << status << std::endl;
-        }
-
         programs_[SHADER_GBUFFER]->bind();
 
         projection_location = programs_[SHADER_GBUFFER]->uniformLocation("projection");
@@ -529,6 +524,13 @@ void GLWidget::renderGBuffer() {
         glUniformMatrix4fv(view_location, 1, GL_FALSE, &view[0][0]);
         glUniformMatrix4fv(model_location, 1, GL_FALSE, &model[0][0]);
         glUniformMatrix3fv(normal_matrix_location, 1, GL_FALSE, &normal[0][0]);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, gBufferFBO);
+
+        GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+        if (status != GL_FRAMEBUFFER_COMPLETE) {
+            std::cerr << "Framebuffer not complete. Status: 0x" << std::hex << status << std::endl;
+        }
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -568,7 +570,8 @@ GLWidget::GLWidget(QWidget *parent)
     roughness_(0),
     renderGBuffer_(true),
     showGBuffer(-1),
-    VAO(0), VAO_sky(0), VBO_i(0), VBO_n(0), VBO_tc(0), VBO_v(0), VBO_i_sky(0), VBO_v_sky(0)
+    VAO(0), VAO_sky(0), VBO_i(0), VBO_n(0), VBO_tc(0), VBO_v(0), VBO_i_sky(0), VBO_v_sky(0),
+    renderHBAO(true)
         {
   setFocusPolicy(Qt::StrongFocus);
 }
@@ -1016,7 +1019,7 @@ void GLWidget::paintGL()
                 glEnable(GL_DEPTH_TEST);
 
             }
-            else {
+            else if (false) {
                 //MESH-----------------------------------------------------------------------------------------
                 //general shader setting
 
@@ -1098,6 +1101,60 @@ void GLWidget::paintGL()
 
                 // T0DO END.
 
+            }
+            if (renderHBAO) {
+                programs_[SHADER_HBAO]->bind();
+
+                GLuint numDirs_location, nSamples_location, searchRadius_location,
+                    fov_location, ar_location, depthTex_location, normalsTex_location;
+
+                zNear_location          = programs_[SHADER_HBAO]->uniformLocation("zNear");
+                zFar_location           = programs_[SHADER_HBAO]->uniformLocation("zFar");
+                numDirs_location        = programs_[SHADER_HBAO]->uniformLocation("numDirs");
+                nSamples_location       = programs_[SHADER_HBAO]->uniformLocation("nSamples");
+                searchRadius_location   = programs_[SHADER_HBAO]->uniformLocation("searchRadius");
+                fov_location            = programs_[SHADER_HBAO]->uniformLocation("fov");
+                ar_location             = programs_[SHADER_HBAO]->uniformLocation("aspectRatio");
+                depthTex_location       = programs_[SHADER_HBAO]->uniformLocation("depthTex");
+                normalsTex_location     = programs_[SHADER_HBAO]->uniformLocation("normalsTex");
+
+
+                //glActiveTexture(GL_TEXTURE0);
+                //glBindTexture(GL_TEXTURE_2D, gAlbedoTexture);
+                //glUniform1i(albedo_sampler_loc, 0);
+
+                glActiveTexture(GL_TEXTURE1);
+                glBindTexture(GL_TEXTURE_2D, gNormalTexture);
+                glUniform1i(normalsTex_location, 1);
+                checkOpenGLError("Render HBAO Quad 1");
+
+                glActiveTexture(GL_TEXTURE2);
+                glBindTexture(GL_TEXTURE_2D, gDepthTexture);
+                glUniform1i(depthTex_location, 2);
+                checkOpenGLError("Render HBAO Quad 2");
+
+                glUniform1f(zNear_location, float(kZNear));
+                checkOpenGLError("Render HBAO Quad 3.1");
+                glUniform1f(zFar_location, float(kZFar));
+                checkOpenGLError("Render HBAO Quad 3.2");
+                glUniform1f(fov_location, float(glm::radians(kFieldOfView)));
+                checkOpenGLError("Render HBAO Quad 3.3");
+                glUniform1f(ar_location, width_/float(height_));
+                checkOpenGLError("Render HBAO Quad 3.4");
+
+                glUniform1i(numDirs_location, nDirections);
+                glUniform1i(nSamples_location, nSamples);
+                checkOpenGLError("Render HBAO Quad 4");
+
+                glUniform1f(searchRadius_location, influenceRadius);
+                checkOpenGLError("Render HBAO Quad 5");
+
+
+                glDepthMask(GL_FALSE);
+                DrawQuad();
+                glDepthMask(GL_TRUE);
+                std::cout << "Rendered HBAO" << std::endl;
+                checkOpenGLError("Render HBAO Quad");
             }
             //SKY-----------------------------------------------------------------------------------------
             if(skyVisible_) {
@@ -1216,6 +1273,26 @@ void GLWidget::SetShowGBuffer(int i) {
     else
         sign = -1;
     showGBuffer = (i+1) * sign;
+    update();
+}
+
+void GLWidget::SetHBAO(bool set) {
+    renderHBAO = set;
+    update();
+}
+
+void GLWidget::SetInfluenceRadius(double val) {
+    influenceRadius = val;
+    update();
+}
+
+void GLWidget::SetNumSamples(int val) {
+    nSamples = val;
+    update();
+}
+
+void GLWidget::SetNumDirections(int val) {
+    nDirections = val;
     update();
 }
 

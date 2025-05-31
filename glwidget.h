@@ -219,8 +219,14 @@ private:
   GLuint gBufferFBO;
   GLuint gAlbedoTexture, gNormalTexture, gDepthTexture;
 
+  //GLuint renderFBO;
+
   bool renderGBuffer_;
   int showGBuffer;
+
+  bool renderHBAO;
+  float influenceRadius;
+  int nSamples, nDirections;
 
 
  protected slots:
@@ -291,6 +297,12 @@ private:
 
   void SetShowGBuffer(bool set);
   void SetShowGBuffer(int);
+
+  void SetHBAO(bool set);
+
+  void SetInfluenceRadius(double val);
+  void SetNumSamples(int val);
+  void SetNumDirections(int val);
 
  signals:
   /**

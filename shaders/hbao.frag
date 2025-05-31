@@ -14,7 +14,7 @@ uniform float fov;
 uniform float aspectRatio;
 
 uniform sampler2D depthTex;
-uniform sampler2D normalTex;
+uniform sampler2D normalsTex;
 
 const float PI = 3.14159265359;
 
@@ -29,31 +29,32 @@ float linearizeDepth(float depth) {
 vec3 recoverEyePos(vec2 tex_coords) {
     float z_eye = linearizeDepth(texture(depthTex, tex_coords).r);
 
-    float BC_x = (tex_coords.x * 2.f - 1.f) * width;
-    float BC_y = (tex_coords.y * 2.f - 1.f) * height;
+    float BC_x = (tex_coords.x * 2.f - 1.f) * width/2.f;
+    float BC_y = (tex_coords.y * 2.f - 1.f) * height/2.f;
 
     float x_eye = BC_x * z_eye / zNear;
     float y_eye = BC_y * z_eye / zNear;
-    return vec3(x_eye, y_eye, -z_eye);
+    return vec3(x_eye, y_eye, z_eye);
 }
 
 void main (void) {
     vec3 P = recoverEyePos(uvs);
-    vec3 n = texture(normalTex, uvs).rgb;
-
-    
+    vec3 n = texture(normalsTex, uvs).rgb;
 
     float ao = 0;
-    float step_ = searchRadius / nSamples; 
+
+    float searchRadius_uv = searchRadius / (2 * P.z * tan(fov/2.f));
+
+    float step_ = searchRadius_uv / nSamples; 
     for (int d = 0; d < numDirs; ++d) {
-        float angle = (d / numDirs) * 2 * PI;
+        float angle = (d / float(numDirs)) * 2 * PI;
         vec2 dir = vec2(cos(angle), sin(angle));
 
         float t_theta = atan(-dot(dir,n.xy),n.z);
 
         float h_theta = t_theta;
         float r_theta = 0;
-        for (int i = 0; i < nSamples; ++i) {
+        for (int i = 1; i <= nSamples; ++i) {
             vec2 S_uv = uvs + dir * step_ * i;
             if (S_uv.x < 0.0 || S_uv.x > 1.0 || S_uv.y < 0.0 || S_uv.y > 1.0) {
                 continue;
@@ -62,6 +63,9 @@ void main (void) {
 
             vec3 D = S - P;
             float dist_xy = length(D.xy);
+
+            if (length(D) > searchRadius)
+                continue;
 
             float alpha = atan(-D.z, dist_xy);
 
@@ -77,4 +81,5 @@ void main (void) {
     ao /= float(numDirs);
 
     frag_color = vec4(vec3(1.f - ao), 1.f);
+    // frag_color = vec4(1.f, 0.f, 1.f, 1.f);
 }
