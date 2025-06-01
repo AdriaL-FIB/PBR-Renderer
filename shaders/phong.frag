@@ -3,7 +3,7 @@
 in vec3 normal_eye;
 in vec3 pos_eye;
 
-out vec4 frag_color;
+layout(location = 0) out vec4 frag_color;
 
 uniform vec3 light; // world space
 

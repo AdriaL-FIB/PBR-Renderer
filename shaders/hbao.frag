@@ -74,15 +74,16 @@ void main (void) {
 
             vec3 D = S - P;
             float dist_xy = length(D.xy);
+            float dist_d = length(D);
 
-            if (length(D) > searchRadius)
+            if (dist_d > searchRadius)
                 continue;
 
             float alpha = atan(-D.z, dist_xy);
 
             if (alpha > h_theta) {
                 h_theta = alpha;
-                r_theta = dist_xy;
+                r_theta = dist_d;
             }
         }
 

@@ -21,6 +21,8 @@
 #define SHADER_GBUFFER 5
 #define SHADER_GBUFFER_VIEW 6
 #define SHADER_HBAO 7
+#define SHADER_BLUR 8
+#define SHADER_APPLYAO 9
 
 namespace {
 
@@ -71,6 +73,8 @@ const std::vector<std::vector<std::string>> kShaderFiles = {
                 {"../shaders/gbuffer.vert",      "../shaders/gbuffer.frag"},
                 {"../shaders/gbuffer-view.vert", "../shaders/gbuffer-view.frag"},
                 {"../shaders/hbao.vert",         "../shaders/hbao.frag"},
+                {"../shaders/blur.vert",         "../shaders/blur.frag"},
+                {"../shaders/applyAO.vert",      "../shaders/applyAO.frag"},
 
 
                 {"../shaders/precomputeBRDF.vert",         "../shaders/precomputeBRDF.frag"},
@@ -487,6 +491,26 @@ void GLWidget::InitGBufferTextures() {
     GLuint attachments[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
     glDrawBuffers(2, attachments);
 
+    glGenFramebuffers(1, &renderFBO);
+    glBindFramebuffer(GL_FRAMEBUFFER, renderFBO);
+
+    glGenTextures(1, &renderTexture1);
+    glBindTexture(GL_TEXTURE_2D, renderTexture1);
+    //glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, this->width_, this->height_, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, renderTexture1, 0);
+
+    glGenTextures(1, &renderTexture2);
+    glBindTexture(GL_TEXTURE_2D, renderTexture2);
+    //glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, this->width_, this->height_, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glBindTexture(GL_TEXTURE_2D, 0);
 }
@@ -526,7 +550,8 @@ void GLWidget::renderGBuffer() {
         glUniformMatrix3fv(normal_matrix_location, 1, GL_FALSE, &normal[0][0]);
 
         glBindFramebuffer(GL_FRAMEBUFFER, gBufferFBO);
-
+        GLuint attachments[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+        glDrawBuffers(2, attachments);
         GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
         if (status != GL_FRAMEBUFFER_COMPLETE) {
             std::cerr << "Framebuffer not complete. Status: 0x" << std::hex << status << std::endl;
@@ -571,7 +596,8 @@ GLWidget::GLWidget(QWidget *parent)
     renderGBuffer_(true),
     showGBuffer(-1),
     VAO(0), VAO_sky(0), VBO_i(0), VBO_n(0), VBO_tc(0), VBO_v(0), VBO_i_sky(0), VBO_v_sky(0),
-    renderHBAO(true)
+    renderHBAO(false),
+    ssao_improvements(false)
         {
   setFocusPolicy(Qt::StrongFocus);
 }
@@ -880,6 +906,11 @@ void GLWidget::resizeGL(int w, int h)
     glBindTexture(GL_TEXTURE_2D, gDepthTexture);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, width_, height_, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
 
+    glBindTexture(GL_TEXTURE_2D, renderTexture1);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width_, height_, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+    glBindTexture(GL_TEXTURE_2D, renderTexture2);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width_, height_, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+
     camera_.SetViewport(0, 0, w, h);
     camera_.SetProjection(kFieldOfView, kZNear, kZFar);
 }
@@ -968,16 +999,98 @@ void GLWidget::paintGL()
 
             renderGBuffer();
 
-            //std::cout << "showGBuffer = " << showGBuffer << std::endl;
+            //MESH-----------------------------------------------------------------------------------------
+            //general shader setting
+
+            programs_[currentShader_]->bind();
+
+            projection_location       = programs_[currentShader_]->uniformLocation("projection");
+            view_location             = programs_[currentShader_]->uniformLocation("view");
+            model_location            = programs_[currentShader_]->uniformLocation("model");
+            normal_matrix_location    = programs_[currentShader_]->uniformLocation("normal_matrix");
+            specular_map_location     = programs_[currentShader_]->uniformLocation("specular_map");
+            prefilter_map_location    = programs_[currentShader_]->uniformLocation("prefilter_map");
+            brdfLUT_location          = programs_[currentShader_]->uniformLocation("brdfLUT");
+            diffuse_map_location      = programs_[currentShader_]->uniformLocation("diffuse_map");
+            color_map_location        = programs_[currentShader_]->uniformLocation("color_map");
+            roughness_map_location    = programs_[currentShader_]->uniformLocation("roughness_map");
+            metalness_map_location    = programs_[currentShader_]->uniformLocation("metalness_map");
+            current_text_location     = programs_[currentShader_]->uniformLocation("current_texture");
+            fresnel_location          = programs_[currentShader_]->uniformLocation("fresnel");
+            light_location            = programs_[currentShader_]->uniformLocation("light");
+            roughness_location        = programs_[currentShader_]->uniformLocation("roughness");
+            metalness_location        = programs_[currentShader_]->uniformLocation("metalness");
+
+
+
+            glUniformMatrix4fv(projection_location, 1, GL_FALSE, &projection[0][0]);
+            glUniformMatrix4fv(view_location, 1, GL_FALSE, &view[0][0]);
+            glUniformMatrix4fv(model_location, 1, GL_FALSE, &model[0][0]);
+            glUniformMatrix3fv(normal_matrix_location, 1, GL_FALSE, &normal[0][0]);
+
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_CUBE_MAP, specular_map_);
+            glUniform1i(specular_map_location, 0);
+
+            glActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_CUBE_MAP, diffuse_map_);
+            glUniform1i(diffuse_map_location, 1);
+
+            //T0DO(students): active texture location for the following textures:
+            //Texture unit 3 color_map_
+            //Texture unit 4 roughness_map_
+            //Texture unit 5 metalness_map_
+
+            glActiveTexture(GL_TEXTURE2);
+            //glEnable(GL_TEXTURE_2D);
+            glBindTexture(GL_TEXTURE_2D, color_map_);
+            glUniform1i(color_map_location, 2);
+
+            glActiveTexture(GL_TEXTURE3);
+            // glEnable(GL_TEXTURE_2D);
+            glBindTexture(GL_TEXTURE_2D, roughness_map_);
+            glUniform1i(roughness_map_location, 3);
+
+            glActiveTexture(GL_TEXTURE4);
+            // glEnable(GL_TEXTURE_2D);
+            glBindTexture(GL_TEXTURE_2D, metalness_map_);
+            glUniform1i(metalness_map_location, 4);
+
+            glActiveTexture(GL_TEXTURE5);
+            glBindTexture(GL_TEXTURE_CUBE_MAP, prefilterMap);
+            glUniform1i(prefilter_map_location, 5);
+
+            glActiveTexture(GL_TEXTURE6);
+            glBindTexture(GL_TEXTURE_2D, brdfLUTTexture);
+            glUniform1i(brdfLUT_location, 6);
+
+
+            glUniform1i(current_text_location, currentTexture_ + 2);
+            glUniform3f(fresnel_location, fresnel_[0], fresnel_[1], fresnel_[2]);
+            glUniform3f(light_location, 0, 2, 0);
+            glUniform1f(roughness_location, roughness_);
+            glUniform1f(metalness_location, metalness_);
+
+            // Render in albedo texture of gbuffer
+            glBindFramebuffer(GL_FRAMEBUFFER, gBufferFBO);
+            GLuint attachments[2] = { GL_COLOR_ATTACHMENT0, GL_NONE };
+            glDrawBuffers(2, attachments);
+            // use the previous render depth buffer
+            glDepthFunc(GL_EQUAL);
+            glBindVertexArray(VAO);
+            glDrawElements(GL_TRIANGLES, mesh_->faces_.size(), GL_UNSIGNED_INT, nullptr);
+            glDepthFunc(GL_LESS);
+
+            glBindFramebuffer(GL_FRAMEBUFFER, defaultFramebufferObject());
+
+
             if (showGBuffer > 0) {
 
                 glBindFramebuffer(GL_READ_FRAMEBUFFER, gBufferFBO);
                 checkOpenGLError("glBindFramebuffer GL_READ_FRAMEBUFFER");
 
-
                 glBindFramebuffer(GL_DRAW_FRAMEBUFFER, defaultFramebufferObject());
                 checkOpenGLError("glBindFramebuffer GL_DRAW_FRAMEBUFFER");
-
 
                 glBlitFramebuffer(
                     0, 0, width_, height_,
@@ -989,12 +1102,12 @@ void GLWidget::paintGL()
 
                 programs_[SHADER_GBUFFER_VIEW]->bind();
 
-                GLint albedo_sampler_loc = programs_[SHADER_GBUFFER_VIEW]->uniformLocation("gAlbedoSampler");
-                GLint normal_sampler_loc = programs_[SHADER_GBUFFER_VIEW]->uniformLocation("gNormalSampler");
-                GLint depth_sampler_loc = programs_[SHADER_GBUFFER_VIEW]->uniformLocation("gDepthSampler");
-                zNear_location = programs_[SHADER_GBUFFER_VIEW]->uniformLocation("zNear");
-                zFar_location = programs_[SHADER_GBUFFER_VIEW]->uniformLocation("zFar");
-                current_text_location = programs_[SHADER_GBUFFER_VIEW]->uniformLocation("current_texture");
+                GLint albedo_sampler_loc    = programs_[SHADER_GBUFFER_VIEW]->uniformLocation("gAlbedoSampler");
+                GLint normal_sampler_loc    = programs_[SHADER_GBUFFER_VIEW]->uniformLocation("gNormalSampler");
+                GLint depth_sampler_loc     = programs_[SHADER_GBUFFER_VIEW]->uniformLocation("gDepthSampler");
+                zNear_location              = programs_[SHADER_GBUFFER_VIEW]->uniformLocation("zNear");
+                zFar_location               = programs_[SHADER_GBUFFER_VIEW]->uniformLocation("zFar");
+                current_text_location       = programs_[SHADER_GBUFFER_VIEW]->uniformLocation("current_texture");
 
                 glActiveTexture(GL_TEXTURE0);
                 glBindTexture(GL_TEXTURE_2D, gAlbedoTexture);
@@ -1019,142 +1132,163 @@ void GLWidget::paintGL()
                 glEnable(GL_DEPTH_TEST);
 
             }
-            else if (false) {
-                //MESH-----------------------------------------------------------------------------------------
-                //general shader setting
+            else {
+                if (renderHBAO) {
+                    programs_[SHADER_HBAO]->bind();
 
-                programs_[currentShader_]->bind();
+                    GLuint numDirs_location, nSamples_location, searchRadius_location,
+                        fov_location, ar_location, depthTex_location, normalsTex_location, ssaoImprovements_location;
 
-                projection_location       = programs_[currentShader_]->uniformLocation("projection");
-                view_location             = programs_[currentShader_]->uniformLocation("view");
-                model_location            = programs_[currentShader_]->uniformLocation("model");
-                normal_matrix_location    = programs_[currentShader_]->uniformLocation("normal_matrix");
-                specular_map_location     = programs_[currentShader_]->uniformLocation("specular_map");
-                prefilter_map_location    = programs_[currentShader_]->uniformLocation("prefilter_map");
-                brdfLUT_location          = programs_[currentShader_]->uniformLocation("brdfLUT");
-                diffuse_map_location      = programs_[currentShader_]->uniformLocation("diffuse_map");
-                color_map_location        = programs_[currentShader_]->uniformLocation("color_map");
-                roughness_map_location    = programs_[currentShader_]->uniformLocation("roughness_map");
-                metalness_map_location    = programs_[currentShader_]->uniformLocation("metalness_map");
-                current_text_location     = programs_[currentShader_]->uniformLocation("current_texture");
-                fresnel_location          = programs_[currentShader_]->uniformLocation("fresnel");
-                light_location            = programs_[currentShader_]->uniformLocation("light");
-                roughness_location        = programs_[currentShader_]->uniformLocation("roughness");
-                metalness_location        = programs_[currentShader_]->uniformLocation("metalness");
+                    zNear_location              = programs_[SHADER_HBAO]->uniformLocation("zNear");
+                    zFar_location               = programs_[SHADER_HBAO]->uniformLocation("zFar");
+                    numDirs_location            = programs_[SHADER_HBAO]->uniformLocation("numDirs");
+                    nSamples_location           = programs_[SHADER_HBAO]->uniformLocation("nSamples");
+                    searchRadius_location       = programs_[SHADER_HBAO]->uniformLocation("searchRadius");
+                    fov_location                = programs_[SHADER_HBAO]->uniformLocation("fov");
+                    ar_location                 = programs_[SHADER_HBAO]->uniformLocation("aspectRatio");
+                    depthTex_location           = programs_[SHADER_HBAO]->uniformLocation("depthTex");
+                    normalsTex_location         = programs_[SHADER_HBAO]->uniformLocation("normalsTex");
+                    ssaoImprovements_location   = programs_[SHADER_HBAO]->uniformLocation("improvements");
 
 
+                    //glActiveTexture(GL_TEXTURE0);
+                    //glBindTexture(GL_TEXTURE_2D, gAlbedoTexture);
+                    //glUniform1i(albedo_sampler_loc, 0);
 
-                glUniformMatrix4fv(projection_location, 1, GL_FALSE, &projection[0][0]);
-                glUniformMatrix4fv(view_location, 1, GL_FALSE, &view[0][0]);
-                glUniformMatrix4fv(model_location, 1, GL_FALSE, &model[0][0]);
-                glUniformMatrix3fv(normal_matrix_location, 1, GL_FALSE, &normal[0][0]);
+                    glActiveTexture(GL_TEXTURE1);
+                    glBindTexture(GL_TEXTURE_2D, gNormalTexture);
+                    glUniform1i(normalsTex_location, 1);
+                    checkOpenGLError("Render HBAO Quad 1");
+
+                    glActiveTexture(GL_TEXTURE2);
+                    glBindTexture(GL_TEXTURE_2D, gDepthTexture);
+                    glUniform1i(depthTex_location, 2);
+                    checkOpenGLError("Render HBAO Quad 2");
+
+                    glUniform1f(zNear_location, float(kZNear));
+                    checkOpenGLError("Render HBAO Quad 3.1");
+                    glUniform1f(zFar_location, float(kZFar));
+                    checkOpenGLError("Render HBAO Quad 3.2");
+                    glUniform1f(fov_location, float(glm::radians(kFieldOfView)));
+                    checkOpenGLError("Render HBAO Quad 3.3");
+                    glUniform1f(ar_location, width_/float(height_));
+                    checkOpenGLError("Render HBAO Quad 3.4");
+
+                    glUniform1i(numDirs_location, nDirections);
+                    glUniform1i(nSamples_location, nSamples);
+                    checkOpenGLError("Render HBAO Quad 4");
+
+                    glUniform1f(searchRadius_location, influenceRadius);
+                    checkOpenGLError("Render HBAO Quad 5");
+
+                    glUniform1i(ssaoImprovements_location, ssao_improvements);
+
+
+
+                    glBindFramebuffer(GL_FRAMEBUFFER, renderFBO);
+                    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, renderTexture1, 0);
+                    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                    DrawQuad();
+                    glBindFramebuffer(GL_FRAMEBUFFER, defaultFramebufferObject());
+
+                    // Blur
+                    if (ssao_improvements and false) {
+                        programs_[SHADER_BLUR]->bind();
+
+                        GLuint width_location, height_location, tex_location, ssaoImprovements_location;
+
+
+                        width_location              = programs_[SHADER_BLUR]->uniformLocation("width");
+                        height_location             = programs_[SHADER_BLUR]->uniformLocation("height");
+                        tex_location                = programs_[SHADER_BLUR]->uniformLocation("tex");
+                        ssaoImprovements_location   = programs_[SHADER_BLUR]->uniformLocation("improvements");
+
+
+                        glActiveTexture(GL_TEXTURE0);
+                        glBindTexture(GL_TEXTURE_2D, renderTexture1);
+                        glUniform1i(tex_location, 0);
+
+                        glUniform1i(width_location, width_);
+                        glUniform1i(height_location, height_);
+                        glUniform1i(tex_location, tex_location);
+                        glUniform1i(ssaoImprovements_location, ssao_improvements);
+
+                        glBindFramebuffer(GL_FRAMEBUFFER, renderFBO);
+                        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, renderTexture2, 0);
+                        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                        DrawQuad();
+                        glBindFramebuffer(GL_FRAMEBUFFER, defaultFramebufferObject());
+
+                        // swap input <--> output
+                        glActiveTexture(GL_TEXTURE0);
+                        glBindTexture(GL_TEXTURE_2D, renderTexture2);
+
+                        glBindFramebuffer(GL_FRAMEBUFFER, renderFBO);
+                        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, renderTexture1, 0);
+                        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                        DrawQuad();
+                        glBindFramebuffer(GL_FRAMEBUFFER, defaultFramebufferObject());
+                    }
+
+                    // apply AO to albedo
+                    GLuint albedo_location, ao_location;
+                    albedo_location = programs_[SHADER_HBAO]->uniformLocation("albedoTex");
+                    ao_location     = programs_[SHADER_HBAO]->uniformLocation("aoTex");
+
+                    glActiveTexture(GL_TEXTURE0);
+                    glBindTexture(GL_TEXTURE_2D, gAlbedoTexture);
+                    glUniform1i(normalsTex_location, 1);
+                    checkOpenGLError("apply AO to albedo 1");
+
+                    glActiveTexture(GL_TEXTURE1);
+                    glBindTexture(GL_TEXTURE_2D, renderTexture1);
+                    glUniform1i(depthTex_location, 2);
+                    checkOpenGLError("apply AO to albedo 2");
+
+                    glBindFramebuffer(GL_FRAMEBUFFER, renderFBO);
+                    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, renderTexture2, 0);
+                    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                    DrawQuad();
+                    glBindFramebuffer(GL_FRAMEBUFFER, defaultFramebufferObject());
+
+                    std::swap(gAlbedoTexture, renderTexture2);
+
+                }
+
+                // Draw quad with albedo
+                glBindFramebuffer(GL_READ_FRAMEBUFFER, gBufferFBO);
+                checkOpenGLError("glBindFramebuffer GL_READ_FRAMEBUFFER");
+
+                glBindFramebuffer(GL_DRAW_FRAMEBUFFER, defaultFramebufferObject());
+                checkOpenGLError("glBindFramebuffer GL_DRAW_FRAMEBUFFER");
+
+                glBlitFramebuffer(
+                    0, 0, width_, height_,
+                    0, 0, width_, height_,
+                    GL_DEPTH_BUFFER_BIT,
+                    GL_NEAREST
+                );
+                checkOpenGLError("glBlitFramebuffer");
+
+                programs_[SHADER_GBUFFER_VIEW]->bind();
+
+                GLint albedo_sampler_loc = programs_[SHADER_GBUFFER_VIEW]->uniformLocation("gAlbedoSampler");
+                current_text_location = programs_[SHADER_GBUFFER_VIEW]->uniformLocation("current_texture");
 
                 glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_CUBE_MAP, specular_map_);
-                glUniform1i(specular_map_location, 0);
+                glBindTexture(GL_TEXTURE_2D, gAlbedoTexture);
+                glUniform1i(albedo_sampler_loc, 0);
 
-                glActiveTexture(GL_TEXTURE1);
-                glBindTexture(GL_TEXTURE_CUBE_MAP, diffuse_map_);
-                glUniform1i(diffuse_map_location, 1);
+                glUniform1i(current_text_location, 0);
 
-                //T0DO(students): active texture location for the following textures:
-                //Texture unit 3 color_map_
-                //Texture unit 4 roughness_map_
-                //Texture unit 5 metalness_map_
-
-                glActiveTexture(GL_TEXTURE2);
-                //glEnable(GL_TEXTURE_2D);
-                glBindTexture(GL_TEXTURE_2D, color_map_);
-                glUniform1i(color_map_location, 2);
-
-                glActiveTexture(GL_TEXTURE3);
-                // glEnable(GL_TEXTURE_2D);
-                glBindTexture(GL_TEXTURE_2D, roughness_map_);
-                glUniform1i(roughness_map_location, 3);
-
-                glActiveTexture(GL_TEXTURE4);
-                // glEnable(GL_TEXTURE_2D);
-                glBindTexture(GL_TEXTURE_2D, metalness_map_);
-                glUniform1i(metalness_map_location, 4);
-
-                glActiveTexture(GL_TEXTURE5);
-                glBindTexture(GL_TEXTURE_CUBE_MAP, prefilterMap);
-                glUniform1i(prefilter_map_location, 5);
-
-                glActiveTexture(GL_TEXTURE6);
-                glBindTexture(GL_TEXTURE_2D, brdfLUTTexture);
-                glUniform1i(brdfLUT_location, 6);
-
-
-                //T0DO END
-
-                glUniform1i(current_text_location, currentTexture_ + 2); // T0DO: chapuza ?
-                glUniform3f(fresnel_location, fresnel_[0], fresnel_[1], fresnel_[2]);
-                glUniform3f(light_location, 0, 2, 0);
-                glUniform1f(roughness_location, roughness_);
-                glUniform1f(metalness_location, metalness_);
-
-
-                // T0DO(students): Implement draw call of the mesh
-                glBindVertexArray(VAO);
-                glDrawElements(GL_TRIANGLES, mesh_->faces_.size(), GL_UNSIGNED_INT, nullptr);
-
-                // T0DO END.
-
-            }
-            if (renderHBAO) {
-                programs_[SHADER_HBAO]->bind();
-
-                GLuint numDirs_location, nSamples_location, searchRadius_location,
-                    fov_location, ar_location, depthTex_location, normalsTex_location;
-
-                zNear_location          = programs_[SHADER_HBAO]->uniformLocation("zNear");
-                zFar_location           = programs_[SHADER_HBAO]->uniformLocation("zFar");
-                numDirs_location        = programs_[SHADER_HBAO]->uniformLocation("numDirs");
-                nSamples_location       = programs_[SHADER_HBAO]->uniformLocation("nSamples");
-                searchRadius_location   = programs_[SHADER_HBAO]->uniformLocation("searchRadius");
-                fov_location            = programs_[SHADER_HBAO]->uniformLocation("fov");
-                ar_location             = programs_[SHADER_HBAO]->uniformLocation("aspectRatio");
-                depthTex_location       = programs_[SHADER_HBAO]->uniformLocation("depthTex");
-                normalsTex_location     = programs_[SHADER_HBAO]->uniformLocation("normalsTex");
-
-
-                //glActiveTexture(GL_TEXTURE0);
-                //glBindTexture(GL_TEXTURE_2D, gAlbedoTexture);
-                //glUniform1i(albedo_sampler_loc, 0);
-
-                glActiveTexture(GL_TEXTURE1);
-                glBindTexture(GL_TEXTURE_2D, gNormalTexture);
-                glUniform1i(normalsTex_location, 1);
-                checkOpenGLError("Render HBAO Quad 1");
-
-                glActiveTexture(GL_TEXTURE2);
-                glBindTexture(GL_TEXTURE_2D, gDepthTexture);
-                glUniform1i(depthTex_location, 2);
-                checkOpenGLError("Render HBAO Quad 2");
-
-                glUniform1f(zNear_location, float(kZNear));
-                checkOpenGLError("Render HBAO Quad 3.1");
-                glUniform1f(zFar_location, float(kZFar));
-                checkOpenGLError("Render HBAO Quad 3.2");
-                glUniform1f(fov_location, float(glm::radians(kFieldOfView)));
-                checkOpenGLError("Render HBAO Quad 3.3");
-                glUniform1f(ar_location, width_/float(height_));
-                checkOpenGLError("Render HBAO Quad 3.4");
-
-                glUniform1i(numDirs_location, nDirections);
-                glUniform1i(nSamples_location, nSamples);
-                checkOpenGLError("Render HBAO Quad 4");
-
-                glUniform1f(searchRadius_location, influenceRadius);
-                checkOpenGLError("Render HBAO Quad 5");
-
-
+                glDisable(GL_DEPTH_TEST);
                 glDepthMask(GL_FALSE);
                 DrawQuad();
                 glDepthMask(GL_TRUE);
-                std::cout << "Rendered HBAO" << std::endl;
-                checkOpenGLError("Render HBAO Quad");
+                glEnable(GL_DEPTH_TEST);
+
+                if (renderHBAO) // Undo swap
+                    std::swap(gAlbedoTexture, renderTexture2);
             }
             //SKY-----------------------------------------------------------------------------------------
             if(skyVisible_) {
@@ -1296,4 +1430,8 @@ void GLWidget::SetNumDirections(int val) {
     update();
 }
 
+void GLWidget::SetSSAOImprovements(bool b) {
+    ssao_improvements = b;
+    update();
+}
 

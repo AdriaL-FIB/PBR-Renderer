@@ -216,8 +216,9 @@ private:
   unsigned int brdfLUTTexture;
 
 
-  GLuint gBufferFBO;
+  GLuint gBufferFBO, renderFBO;
   GLuint gAlbedoTexture, gNormalTexture, gDepthTexture;
+  GLuint renderTexture1, renderTexture2;
 
   //GLuint renderFBO;
 
@@ -227,6 +228,8 @@ private:
   bool renderHBAO;
   float influenceRadius;
   int nSamples, nDirections;
+
+  bool ssao_improvements;
 
 
  protected slots:
@@ -303,6 +306,8 @@ private:
   void SetInfluenceRadius(double val);
   void SetNumSamples(int val);
   void SetNumDirections(int val);
+
+  void SetSSAOImprovements(bool);
 
  signals:
   /**

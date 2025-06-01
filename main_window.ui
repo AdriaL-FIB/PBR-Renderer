@@ -404,6 +404,13 @@
               </widget>
              </item>
              <item>
+              <widget class="QCheckBox" name="checkBox_2">
+               <property name="text">
+                <string>SSAO</string>
+               </property>
+              </widget>
+             </item>
+             <item>
               <layout class="QHBoxLayout" name="horizontalLayout_5">
                <item>
                 <widget class="QLabel" name="label_6">
@@ -459,6 +466,13 @@
                 </widget>
                </item>
               </layout>
+             </item>
+             <item>
+              <widget class="QCheckBox" name="checkBox">
+               <property name="text">
+                <string>SSAO Improvements</string>
+               </property>
+              </widget>
              </item>
              <item>
               <spacer name="verticalSpacer">
@@ -643,6 +657,8 @@
     <slot>SetInfluenceRadius(double)</slot>
     <slot>SetNumSamples(int)</slot>
     <slot>SetNumDirections(int)</slot>
+    <slot>SetSSAOImprovements(bool)</slot>
+    <slot>SetHBAO(bool)</slot>
    </slots>
   </customwidget>
  </customwidgets>
@@ -928,7 +944,7 @@
    <hints>
     <hint type="sourcelabel">
      <x>760</x>
-     <y>157</y>
+     <y>183</y>
     </hint>
     <hint type="destinationlabel">
      <x>498</x>
@@ -944,7 +960,7 @@
    <hints>
     <hint type="sourcelabel">
      <x>773</x>
-     <y>221</y>
+     <y>247</y>
     </hint>
     <hint type="destinationlabel">
      <x>598</x>
@@ -960,11 +976,43 @@
    <hints>
     <hint type="sourcelabel">
      <x>749</x>
-     <y>194</y>
+     <y>220</y>
     </hint>
     <hint type="destinationlabel">
      <x>590</x>
      <y>271</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>checkBox</sender>
+   <signal>toggled(bool)</signal>
+   <receiver>glwidget</receiver>
+   <slot>SetSSAOImprovements(bool)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>667</x>
+     <y>272</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>559</x>
+     <y>316</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>checkBox_2</sender>
+   <signal>toggled(bool)</signal>
+   <receiver>glwidget</receiver>
+   <slot>SetHBAO(bool)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>639</x>
+     <y>153</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>567</x>
+     <y>151</y>
     </hint>
    </hints>
   </connection>
