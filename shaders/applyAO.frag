@@ -10,5 +10,5 @@ uniform sampler2D aoTex;
 void main() {
     vec3 color = texture(albedoTex, uvs).rgb;
     vec3 ao    = texture(aoTex    , uvs).rgb;
-    frag_color = vec4(color, 1.f);
+    frag_color = vec4(color * ao, 1.f);
 }

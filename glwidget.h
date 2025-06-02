@@ -229,7 +229,7 @@ private:
   float influenceRadius;
   int nSamples, nDirections;
 
-  bool ssao_improvements;
+  bool ssao_improvements, onlyAOTerm;
 
 
  protected slots:
@@ -308,6 +308,7 @@ private:
   void SetNumDirections(int val);
 
   void SetSSAOImprovements(bool);
+  void SetOnlyAOTerm(bool);
 
  signals:
   /**

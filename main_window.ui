@@ -41,6 +41,12 @@
    <layout class="QHBoxLayout" name="horizontalLayout">
     <item>
      <widget class="GLWidget" name="glwidget" native="true">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
       <property name="minimumSize">
        <size>
         <width>600</width>
@@ -65,12 +71,18 @@
      <layout class="QVBoxLayout" name="verticalLayout">
       <item>
        <widget class="QTabWidget" name="tabWidget">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
         <property name="currentIndex">
-         <number>1</number>
+         <number>0</number>
         </property>
         <widget class="QWidget" name="tab">
          <attribute name="title">
-          <string>Tab 1</string>
+          <string>PBR</string>
          </attribute>
          <layout class="QVBoxLayout" name="verticalLayout_2">
           <item>
@@ -368,7 +380,7 @@
         </widget>
         <widget class="QWidget" name="tab_2">
          <attribute name="title">
-          <string>Tab 2</string>
+          <string>HBAO</string>
          </attribute>
          <layout class="QVBoxLayout" name="verticalLayout_4">
           <item>
@@ -378,9 +390,12 @@
             </property>
             <layout class="QVBoxLayout" name="verticalLayout_3">
              <item>
-              <widget class="QCheckBox" name="check_showgb">
+              <widget class="QRadioButton" name="check_showgb">
                <property name="text">
                 <string>Show G Buffer</string>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
                </property>
               </widget>
              </item>
@@ -404,9 +419,19 @@
               </widget>
              </item>
              <item>
-              <widget class="QCheckBox" name="checkBox_2">
+              <widget class="QRadioButton" name="radioButton_2">
                <property name="text">
                 <string>SSAO</string>
+               </property>
+               <property name="checked">
+                <bool>false</bool>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QRadioButton" name="radioButton">
+               <property name="text">
+                <string>Only SSAO term</string>
                </property>
               </widget>
              </item>
@@ -425,7 +450,7 @@
                   <enum>QAbstractSpinBox::AdaptiveDecimalStepType</enum>
                  </property>
                  <property name="value">
-                  <double>0.100000000000000</double>
+                  <double>0.200000000000000</double>
                  </property>
                 </widget>
                </item>
@@ -659,6 +684,7 @@
     <slot>SetNumDirections(int)</slot>
     <slot>SetSSAOImprovements(bool)</slot>
     <slot>SetHBAO(bool)</slot>
+    <slot>SetOnlyAOTerm(bool)</slot>
    </slots>
   </customwidget>
  </customwidgets>
@@ -905,22 +931,6 @@
    </hints>
   </connection>
   <connection>
-   <sender>check_showgb</sender>
-   <signal>clicked(bool)</signal>
-   <receiver>glwidget</receiver>
-   <slot>SetShowGBuffer(bool)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>659</x>
-     <y>103</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>532</x>
-     <y>86</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
    <sender>combo_gb</sender>
    <signal>currentIndexChanged(int)</signal>
    <receiver>glwidget</receiver>
@@ -943,8 +953,8 @@
    <slot>SetInfluenceRadius(double)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>760</x>
-     <y>183</y>
+     <x>815</x>
+     <y>220</y>
     </hint>
     <hint type="destinationlabel">
      <x>498</x>
@@ -959,8 +969,8 @@
    <slot>SetNumSamples(int)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>773</x>
-     <y>247</y>
+     <x>815</x>
+     <y>280</y>
     </hint>
     <hint type="destinationlabel">
      <x>598</x>
@@ -975,8 +985,8 @@
    <slot>SetNumDirections(int)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>749</x>
-     <y>220</y>
+     <x>815</x>
+     <y>250</y>
     </hint>
     <hint type="destinationlabel">
      <x>590</x>
@@ -991,8 +1001,8 @@
    <slot>SetSSAOImprovements(bool)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>667</x>
-     <y>272</y>
+     <x>816</x>
+     <y>307</y>
     </hint>
     <hint type="destinationlabel">
      <x>559</x>
@@ -1001,18 +1011,50 @@
    </hints>
   </connection>
   <connection>
-   <sender>checkBox_2</sender>
+   <sender>check_showgb</sender>
+   <signal>toggled(bool)</signal>
+   <receiver>glwidget</receiver>
+   <slot>SetShowGBuffer(bool)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>652</x>
+     <y>103</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>519</x>
+     <y>101</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>radioButton_2</sender>
    <signal>toggled(bool)</signal>
    <receiver>glwidget</receiver>
    <slot>SetHBAO(bool)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>639</x>
-     <y>153</y>
+     <x>655</x>
+     <y>159</y>
     </hint>
     <hint type="destinationlabel">
-     <x>567</x>
-     <y>151</y>
+     <x>555</x>
+     <y>156</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>radioButton</sender>
+   <signal>toggled(bool)</signal>
+   <receiver>glwidget</receiver>
+   <slot>SetOnlyAOTerm(bool)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>640</x>
+     <y>188</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>585</x>
+     <y>204</y>
     </hint>
    </hints>
   </connection>

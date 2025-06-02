@@ -19,7 +19,7 @@ vec4 white = vec4(1.f, 1.f, 1.f, 1.f);
 vec4 blue = vec4(0.f, 0.f, 1.f, 1.f);
 
 void main (void) {
-    gAlbedo = blue;
+    gAlbedo = white;
 #ifdef USE_TEXTURES
     gAlbedo = texture(current_texture, uvs);
 #endif

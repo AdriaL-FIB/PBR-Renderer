@@ -405,24 +405,27 @@ void GLWidget::ComputePrefilteredMap() {
 }
 
 void GLWidget::ComputeBRDFLUTTexture() {
-  glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
-  glBindRenderbuffer(GL_RENDERBUFFER, captureRBO);
-  glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 512, 512);
-  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, brdfLUTTexture, 0);
+    makeCurrent();
+    glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+    glBindRenderbuffer(GL_RENDERBUFFER, captureRBO);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 512, 512);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, brdfLUTTexture, 0);
 
-  glViewport(0, 0, 512, 512);
-  programs_[programs_.size() - 4]->bind();
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  DrawQuad();
+    glViewport(0, 0, 512, 512);
+    programs_[programs_.size() - 4]->bind();
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    DrawQuad();
+    checkOpenGLError("DrawQuad for BRDF LUT");
 
-  // Save image
-  // QImage image(512, 512, QImage::Format_RGBA8888);
-  // glReadBuffer(GL_COLOR_ATTACHMENT0);
-  // glReadPixels(0, 0, 512, 512, GL_RGBA, GL_UNSIGNED_BYTE, image.bits());
-  // image = image.mirrored();
-  // image.save("brdfLUT.png");
+    // Save image
+    QImage image(512, 512, QImage::Format_RGBA8888);
+    glReadBuffer(GL_COLOR_ATTACHMENT0);
+    glReadPixels(0, 0, 512, 512, GL_RGBA, GL_UNSIGNED_BYTE, image.bits());
+    image = image.mirrored();
+    image.save("brdfLUT.png");
 
-  glBindFramebuffer(GL_FRAMEBUFFER, 0); 
+    glBindFramebuffer(GL_FRAMEBUFFER, defaultFramebufferObject());
+    doneCurrent();
 }
 
 void GLWidget::InitCaptureFBO() {
@@ -582,7 +585,7 @@ void GLWidget::renderGBuffer() {
 //    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 //}
 
-GLWidget::GLWidget(QWidget *parent)
+GLWidget::GLWidget(QWidget* parent)
     : QOpenGLWidget(parent),
     initialized_(false),
     width_(0.0),
@@ -594,10 +597,14 @@ GLWidget::GLWidget(QWidget *parent)
     metalness_(0),
     roughness_(0),
     renderGBuffer_(true),
-    showGBuffer(-1),
+    showGBuffer(1),
     VAO(0), VAO_sky(0), VBO_i(0), VBO_n(0), VBO_tc(0), VBO_v(0), VBO_i_sky(0), VBO_v_sky(0),
     renderHBAO(false),
-    ssao_improvements(false)
+    ssao_improvements(false),
+    onlyAOTerm(false),
+    influenceRadius(0.2f),
+    nSamples(10),
+    nDirections(10)
         {
   setFocusPolicy(Qt::StrongFocus);
 }
@@ -1133,7 +1140,8 @@ void GLWidget::paintGL()
 
             }
             else {
-                if (renderHBAO) {
+                GLuint texToRender = gAlbedoTexture;
+                if (renderHBAO or onlyAOTerm) {
                     programs_[SHADER_HBAO]->bind();
 
                     GLuint numDirs_location, nSamples_location, searchRadius_location,
@@ -1192,67 +1200,81 @@ void GLWidget::paintGL()
                     glBindFramebuffer(GL_FRAMEBUFFER, defaultFramebufferObject());
 
                     // Blur
-                    if (ssao_improvements and false) {
+                    if (ssao_improvements) {
                         programs_[SHADER_BLUR]->bind();
 
-                        GLuint width_location, height_location, tex_location, ssaoImprovements_location;
+                        GLuint width_location, height_location, tex_location, ssaoImprovements_location, dir_location;
 
 
                         width_location              = programs_[SHADER_BLUR]->uniformLocation("width");
                         height_location             = programs_[SHADER_BLUR]->uniformLocation("height");
                         tex_location                = programs_[SHADER_BLUR]->uniformLocation("tex");
                         ssaoImprovements_location   = programs_[SHADER_BLUR]->uniformLocation("improvements");
+                        dir_location                = programs_[SHADER_BLUR]->uniformLocation("dir");
 
 
                         glActiveTexture(GL_TEXTURE0);
                         glBindTexture(GL_TEXTURE_2D, renderTexture1);
                         glUniform1i(tex_location, 0);
+                        checkOpenGLError("Blur 1");
 
                         glUniform1i(width_location, width_);
                         glUniform1i(height_location, height_);
-                        glUniform1i(tex_location, tex_location);
                         glUniform1i(ssaoImprovements_location, ssao_improvements);
+                        glUniform1i(dir_location, 0);
+                        checkOpenGLError("Blur 2");
 
                         glBindFramebuffer(GL_FRAMEBUFFER, renderFBO);
                         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, renderTexture2, 0);
                         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
                         DrawQuad();
                         glBindFramebuffer(GL_FRAMEBUFFER, defaultFramebufferObject());
+                        checkOpenGLError("Blur 3");
 
                         // swap input <--> output
                         glActiveTexture(GL_TEXTURE0);
                         glBindTexture(GL_TEXTURE_2D, renderTexture2);
+                        checkOpenGLError("Blur 4");
+
+                        glUniform1i(dir_location, 1);
+                        checkOpenGLError("Blur 5");
 
                         glBindFramebuffer(GL_FRAMEBUFFER, renderFBO);
                         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, renderTexture1, 0);
                         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
                         DrawQuad();
                         glBindFramebuffer(GL_FRAMEBUFFER, defaultFramebufferObject());
+                        checkOpenGLError("Blur 6");
                     }
 
-                    // apply AO to albedo
-                    GLuint albedo_location, ao_location;
-                    albedo_location = programs_[SHADER_HBAO]->uniformLocation("albedoTex");
-                    ao_location     = programs_[SHADER_HBAO]->uniformLocation("aoTex");
+                    if (not onlyAOTerm) {
+                        // apply AO to albedo
+                        programs_[SHADER_APPLYAO]->bind();
 
-                    glActiveTexture(GL_TEXTURE0);
-                    glBindTexture(GL_TEXTURE_2D, gAlbedoTexture);
-                    glUniform1i(normalsTex_location, 1);
-                    checkOpenGLError("apply AO to albedo 1");
+                        GLuint albedo_location, ao_location;
+                        albedo_location = programs_[SHADER_APPLYAO]->uniformLocation("albedoTex");
+                        ao_location     = programs_[SHADER_APPLYAO]->uniformLocation("aoTex");
 
-                    glActiveTexture(GL_TEXTURE1);
-                    glBindTexture(GL_TEXTURE_2D, renderTexture1);
-                    glUniform1i(depthTex_location, 2);
-                    checkOpenGLError("apply AO to albedo 2");
+                        glActiveTexture(GL_TEXTURE0);
+                        glBindTexture(GL_TEXTURE_2D, gAlbedoTexture);
+                        glUniform1i(albedo_location, 0);
+                        checkOpenGLError("apply AO to albedo 1");
 
-                    glBindFramebuffer(GL_FRAMEBUFFER, renderFBO);
-                    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, renderTexture2, 0);
-                    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-                    DrawQuad();
-                    glBindFramebuffer(GL_FRAMEBUFFER, defaultFramebufferObject());
+                        glActiveTexture(GL_TEXTURE1);
+                        glBindTexture(GL_TEXTURE_2D, renderTexture1);
+                        glUniform1i(ao_location, 1);
+                        checkOpenGLError("apply AO to albedo 2");
 
-                    std::swap(gAlbedoTexture, renderTexture2);
-
+                        glBindFramebuffer(GL_FRAMEBUFFER, renderFBO);
+                        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, renderTexture2, 0);
+                        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                        DrawQuad();
+                        glBindFramebuffer(GL_FRAMEBUFFER, defaultFramebufferObject());
+                        texToRender = renderTexture2;
+                    }
+                    else {
+                        texToRender = renderTexture1;
+                    }
                 }
 
                 // Draw quad with albedo
@@ -1276,7 +1298,7 @@ void GLWidget::paintGL()
                 current_text_location = programs_[SHADER_GBUFFER_VIEW]->uniformLocation("current_texture");
 
                 glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, gAlbedoTexture);
+                glBindTexture(GL_TEXTURE_2D, texToRender);
                 glUniform1i(albedo_sampler_loc, 0);
 
                 glUniform1i(current_text_location, 0);
@@ -1286,9 +1308,6 @@ void GLWidget::paintGL()
                 DrawQuad();
                 glDepthMask(GL_TRUE);
                 glEnable(GL_DEPTH_TEST);
-
-                if (renderHBAO) // Undo swap
-                    std::swap(gAlbedoTexture, renderTexture2);
             }
             //SKY-----------------------------------------------------------------------------------------
             if(skyVisible_) {
@@ -1397,7 +1416,8 @@ void GLWidget::SetRoughness(double d) {
 
 void GLWidget::SetShowGBuffer(bool b) {
     showGBuffer *= -1;
-    update();
+    if (b)
+        update();
 }
 
 void GLWidget::SetShowGBuffer(int i) {
@@ -1410,9 +1430,10 @@ void GLWidget::SetShowGBuffer(int i) {
     update();
 }
 
-void GLWidget::SetHBAO(bool set) {
-    renderHBAO = set;
-    update();
+void GLWidget::SetHBAO(bool b) {
+    renderHBAO = b;
+    if (b)
+        update();
 }
 
 void GLWidget::SetInfluenceRadius(double val) {
@@ -1433,5 +1454,11 @@ void GLWidget::SetNumDirections(int val) {
 void GLWidget::SetSSAOImprovements(bool b) {
     ssao_improvements = b;
     update();
+}
+
+void GLWidget::SetOnlyAOTerm(bool b) {
+    onlyAOTerm = b;
+    if (b)
+        update();
 }
 

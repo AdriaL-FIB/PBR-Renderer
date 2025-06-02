@@ -35,13 +35,15 @@ float linearizeDepth(float depth) {
 vec3 recoverEyePos(vec2 tex_coords) {
     float z_eye = linearizeDepth(texture(depthTex, tex_coords).r);
 
-    float BC_x = (tex_coords.x * 2.f - 1.f) * width/2.f;
-    float BC_y = (tex_coords.y * 2.f - 1.f) * height/2.f;
+    float x_at_znear = (tex_coords.x * 2.f - 1.f) * width/2.f;
+    float y_at_znear = (tex_coords.y * 2.f - 1.f) * height/2.f;
 
-    float x_eye = BC_x * z_eye / zNear;
-    float y_eye = BC_y * z_eye / zNear;
+    float x_eye = x_at_znear * z_eye / zNear;
+    float y_eye = y_at_znear * z_eye / zNear;
     return vec3(x_eye, y_eye, z_eye);
 }
+
+const float bias = 0.05f;
 
 void main (void) {
     vec3 P = recoverEyePos(uvs);
@@ -87,7 +89,7 @@ void main (void) {
             }
         }
 
-        ao += (sin(h_theta) - sin(t_theta)) * (max(0, 1 - r_theta / searchRadius));
+        ao += (sin(h_theta) - sin(t_theta + bias * int(improvements))) * (max(0, 1 - r_theta / searchRadius));
     }
 
     ao /= float(numDirs);
