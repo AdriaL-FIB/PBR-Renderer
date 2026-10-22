@@ -1,55 +1,34 @@
-# ViewerPBS
+# Shaders
 
-This is a skeleton viewer developed for the **Fast Realistic Rendering** course in the **Master in Research in Informatics** program at the **Universitat Politècnica de Catalunya**.
+GLSL 3.30 shaders used by the renderer. Each program is a `.vert` and `.frag` pair with the same base name.
 
-## Authors
+## Geometry and G-buffer
 
-The skeleton was created by **Imanol Munoz-Pandilella** (imanolm@cs.upc.edu), based on a previous skeleton by **Marc Comino**.
+- **`gbuffer.vert` / `gbuffer.frag`**: geometry pass. Writes the albedo and the eye-space normal into two render targets of the G-buffer. The albedo is white unless `USE_TEXTURES` is defined.
+- **`gbuffer-view.vert` / `gbuffer-view.frag`**: debug visualizer. Draws a full-screen quad showing one G-buffer channel (albedo, normals or linearized depth), selected with `current_texture`.
 
-## License
+## Ambient occlusion (HBAO)
 
-This work is protected under a [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) license.
+- **`hbao.vert` / `hbao.frag`**: horizon-based ambient occlusion. Rebuilds the view-space position from the depth buffer, field of view and aspect ratio, then searches for horizons along several directions (`numDirs`, `nSamples`, `searchRadius`). The `improvements` uniform switches an optional variant of the method on or off.
+- **`blur.vert` / `blur.frag`**: separable 5-tap Gaussian blur, applied horizontally or vertically depending on `dir`. It smooths the AO term.
+- **`applyAO.vert` / `applyAO.frag`**: multiplies the albedo by the blurred AO texture.
 
-## Requirements
+## Physically based shading
 
-The skeleton is designed to be developed on **Linux** and requires the following libraries:
-- [Qt](https://www.qt.io) >= 6.0.0
-- [GLM](https://github.com/g-truc/glm)
+- **`pbs.vert` / `pbs.frag`**: physically based shading using color, roughness and metalness maps, a Fresnel term (`fresnel` uniform), a light given in world space by the `light` uniform, and a specular environment map.
+- **`ibl-pbs.vert` / `ibl-pbs.frag`**: the same material model with image-based lighting. It combines the diffuse irradiance map, the prefiltered specular map and the BRDF LUT.
 
-While we do not provide support for other platforms, the skeleton **should work** on **Windows** and **macOS**.
+## Environment maps and precomputation
 
-### Installation Instructions
+- **`computeIrradiance.frag`** (with its `.vert`): convolves the environment cubemap into a diffuse irradiance map by sampling the hemisphere around each direction.
+- **`prefiltered-env.frag`** (with its `.vert`): builds the prefiltered specular map for a given `roughness`, using GGX importance sampling with Hammersley points.
+- **`precomputeBRDF.frag`** (with its `.vert`): precomputes the 2D BRDF integration LUT for the split-sum approximation, using Hammersley points and GGX importance sampling.
 
-#### General Libraries and Drivers
+The `.vert` files of these three programs are simple pass-throughs. The cubemap is sampled with the vertex position as direction.
 
-A **GCC compiler** and **OpenGL drivers** are required:
-```sh
-sudo apt update
-sudo apt install build-essential libgl1-mesa-dev
-```
+## Reference and debug shaders
 
-#### Qt Installation
-1. Download the [Qt installer](https://www.qt.io/download-qt-installer-oss).
-2. Make the installer executable and run it:
-   ```sh
-   chmod +x qt-online-installer-linux-x64-4.8.1.run
-   ./qt-online-installer-linux-x64-4.8.1.run
-   ```
-3. Follow the installation steps and select **Qt 6.X for Desktop Development**.
-4. If necessary, add the installation folder to your system `PATH`.
-
-#### GLM Installation
-Install GLM using the following command:
-```sh
-sudo apt install libglm-dev
-```
-
-## Compilation
-
-You can compile the project using the following commands:
-```sh
-qmake
-make
-```
-Alternatively, you can use **Qt Creator IDE** (included with the Qt installation) to simplify the process and take advantage of its features.
-
+- **`reflection.vert` / `reflection.frag`**: perfect mirror reflection. Samples the environment map along `reflect(-V, N)`.
+- **`sky.vert` / `sky.frag`**: draws the skybox from the environment cubemap, with the depth set to the far plane (`xyww`).
+- **`phong.vert` / `phong.frag`**: Phong shading with fixed ambient, diffuse and specular coefficients. Used as a reference.
+- **`texMap.vert` / `texMap.frag`**: draws a texture directly on the mesh, for checking UVs and textures.
